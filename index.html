@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GymTracker - Treino Otimizado</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#DC2626',
+              redHover: '#B91C1C',
+              darkRed: '#7F1D1D',
+              darkBg: '#0F0F11',
+              cardBg: '#18181B',
+              border: '#27272A',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Estilos personalizados para transição suave e scroll */
+    body {
+      background-color: #0F0F11;
+      color: #F4F4F5;
+      touch-action: manipulation;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #18181B;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #3F3F46;
+      border-radius: 3px;
+    }
+    .animated-pulse-red {
+      animation: pulse-red 2s infinite;
+    }
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+      50% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between font-sans selection:bg-red-500 selection:text-white">
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-30 bg="#0F0F11"/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3">
+    <div class="max-w-xl mx-auto flex justify-between items-center">
+      <div class="flex items-center gap-2">
+        <div class="p-2 bg-red-600 rounded-xl text-white shadow-lg shadow-red-600/30">
+          <i data-lucide="dumbbell" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="font-extrabold text-lg tracking-tight text-white flex items-center gap-1.5">
+            GYM<span class="text-red-500">PRO</span>
+          </h1>
+          <p class="text-[10px] text-zinc-400 font-medium">Ciclo Automático de Treinos</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="toggleHistoryModal()" class="p-2 text-zinc-400 hover:text-white bg-zinc-800/80 rounded-xl hover:bg-zinc-700 transition" title="Histórico">
+          <i data-lucide="history" class="w-5 h-5"></i>
+        </button>
+        <button onclick="toggleReorderModal()" class="p-2 text-zinc-400 hover:text-white bg-zinc-800/80 rounded-xl hover:bg-zinc-700 transition" title="Reorganizar Fila">
+          <i data-lucide="arrow-left-right" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-xl mx-auto w-full flex-grow p-4 space-y-4">
+
+    <!-- Active Workout Card Banner -->
+    <div class="bg-gradient-to-r from-zinc-900 via-zinc-900 to-zinc-900/80 border border-zinc-800 rounded-2xl p-4 shadow-xl relative overflow-hidden">
+      <div class="absolute -right-4 -bottom-4 opacity-10 text-red-600 pointer-events-none">
+        <i data-lucide="flame" class="w-36 h-36"></i>
+      </div>
+
+      <div class="flex justify-between items-start mb-3 relative z-10">
+        <div>
+          <span class="inline-block px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-red-400 bg-red-950/60 border border-red-800/50 rounded-full mb-1">
+            Próximo Treino da Fila
+          </span>
+          <h2 id="currentWorkoutTitle" class="text-2xl font-black text-white"></h2>
+          <p id="currentWorkoutSub" class="text-xs text-zinc-400 mt-0.5"></p>
+        </div>
+        <button onclick="toggleReorderModal()" class="text-xs text-red-400 hover:text-red-300 font-semibold bg-red-950/40 px-2.5 py-1 rounded-lg border border-red-900/40">
+          Trocar
+        </button>
+      </div>
+
+      <!-- Barra de Progresso do Treino -->
+      <div class="space-y-1.5 relative z-10">
+        <div class="flex justify-between text-xs font-semibold text-zinc-400">
+          <span>Progresso das Séries</span>
+          <span id="progressText" class="text-red-400 font-bold">0%</span>
+        </div>
+        <div class="w-full bg-zinc-800 rounded-full h-2.5 overflow-hidden">
+          <div id="progressBar" class="bg-gradient-to-r from-red-600 to-red-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating / Embedded Rest Timer Bar -->
+    <div id="timerCard" class="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 shadow-lg flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div id="timerIconBg" class="p-2.5 bg-zinc-800 rounded-xl text-zinc-400">
+          <i data-lucide="timer" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[11px] text-zinc-400 font-medium">Descanso de Série</div>
+          <div id="timerDisplay" class="text-xl font-bold font-mono tracking-wider text-white">00:00</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button onclick="startTimer(45)" class="px-2.5 py-1.5 text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg transition">45s</button>
+        <button onclick="startTimer(60)" class="px-2.5 py-1.5 text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg transition">60s</button>
+        <button onclick="startTimer(90)" class="px-2.5 py-1.5 text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg transition">90s</button>
+        <button id="timerToggleBtn" onclick="toggleTimer()" class="p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg ml-1 transition">
+          <i data-lucide="play" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Exercise List Header -->
+    <div class="flex justify-between items-center px-1">
+      <h3 class="text-sm font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+        <i data-lucide="list-checks" class="w-4 h-4 text-red-500"></i>
+        Exercícios Programados
+      </h3>
+      <button onclick="resetCurrentSession()" class="text-xs text-zinc-500 hover:text-zinc-300 flex items-center gap-1">
+        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Desmarcar Tudo
+      </button>
+    </div>
+
+    <!-- Container do Exercícios (Injetado via JS) -->
+    <div id="exerciseList" class="space-y-3"></div>
+
+    <!-- Botão Finalizar Treino -->
+    <div class="pt-4 pb-6">
+      <button onclick="finishWorkout()" class="w-full py-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold text-base rounded-2xl shadow-xl shadow-red-950/40 active:scale-[0.99] transition flex items-center justify-center gap-2 animated-pulse-red">
+        <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+        CONCLUIR TREINO E ROTACIONAR FILA
+      </button>
+      <p class="text-center text-xs text-zinc-500 mt-2">
+        Ao concluir, este treino vai para o final da fila (Dia 1 → Dia 2 → Dia 3...)
+      </p>
+    </div>
+
+  </main>
+
+  <!-- MODAL: Reorganizar / Selecionar Fila de Treinos -->
+  <div id="reorderModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="arrow-down-up" class="w-5 h-5 text-red-500"></i>
+          Fila de Treinos (Rotação)
+        </h3>
+        <button onclick="toggleReorderModal()" class="text-zinc-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-zinc-400">
+        O treino no topo é o atual. Você pode alterar a ordem ou selecionar um treino imediatamente.
+      </p>
+
+      <div id="reorderList" class="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1"></div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="resetQueueOrder()" class="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-300 rounded-xl transition">
+          Restaurar Ordem Padrão (Dia 1-5)
+        </button>
+        <button onclick="toggleReorderModal()" class="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-xs font-bold text-white rounded-xl transition">
+          Pronto
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Histórico de Treinos -->
+  <div id="historyModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-zinc-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="history" class="w-5 h-5 text-red-500"></i>
+          Histórico de Treinos Concluídos
+        </h3>
+        <button onclick="toggleHistoryModal()" class="text-zinc-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div id="historyList" class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar pr-1"></div>
+
+      <div class="pt-2 flex justify-between items-center">
+        <button onclick="clearHistory()" class="text-xs text-red-400 hover:text-red-300 underline">
+          Limpar Histórico
+        </button>
+        <button onclick="toggleHistoryModal()" class="py-2 px-4 bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 rounded-xl transition">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuração base dos treinos extraídos das imagens
+    const DEFAULT_WORKOUTS = [
+      {
+        id: 'dia1',
+        title: 'Dia 1: Peito e Tríceps',
+        sub: 'Peitoral & Tríceps - 6 Exercícios',
+        exercises: [
+          { name: 'Supino Reto', sets: 3, reps: '10 a 12' },
+          { name: 'Supino Inclinado', sets: 3, reps: '10 a 12' },
+          { name: 'Fly / Voador', sets: 3, reps: '10 a 12' },
+          { name: 'Tríceps Corda', sets: 3, reps: '10 a 12' },
+          { name: 'Tríceps Francês', sets: 3, reps: '10 a 12' },
+          { name: 'Tríceps Testa na Polia', sets: 3, reps: '10 a 12' }
+        ]
+      },
+      {
+        id: 'dia2',
+        title: 'Dia 2: Costas e Bíceps',
+        sub: 'Dorsal & Bíceps - 6 Exercícios',
+        exercises: [
+          { name: 'Puxada Aberta', sets: 3, reps: '10 a 12' },
+          { name: 'Remada Curvada', sets: 3, reps: '10 a 12' },
+          { name: 'Remada Baixa', sets: 3, reps: '10 a 12' },
+          { name: 'Rosca Direta', sets: 3, reps: '10 a 12' },
+          { name: 'Rosca Martelo', sets: 3, reps: '10 a 12' },
+          { name: 'Rosca Scott', sets: 3, reps: '10 a 12' }
+        ]
+      },
+      {
+        id: 'dia3',
+        title: 'Dia 3: Perna Completo',
+        sub: 'Quadríceps & Posteriores - 6 Exercícios',
+        exercises: [
+          { name: 'Agachamento Hack', sets: 3, reps: '10 a 12' },
+          { name: 'Leg Press', sets: 3, reps: '10 a 12' },
+          { name: 'Cadeira Extensora', sets: 3, reps: '10 a 12' },
+          { name: 'Mesa Flexora', sets: 3, reps: '10 a 12' },
+          { name: 'Cadeira Flexora', sets: 3, reps: '10 a 12' },
+          { name: 'Cadeira Adutora', sets: 3, reps: '10 a 12' }
+        ]
+      },
+      {
+        id: 'dia4',
+        title: 'Dia 4: Ombro Isolado',
+        sub: 'Deltoides Completo - 4 Exercícios',
+        exercises: [
+          { name: 'Desenvolvimento com Halteres', sets: 3, reps: '10 a 12' },
+          { name: 'Elevação Lateral', sets: 3, reps: '10 a 12' },
+          { name: 'Elevação Frontal', sets: 3, reps: '10 a 12' },
+          { name: 'Crucifixo Inverso', sets: 3, reps: '10 a 12' }
+        ]
+      },
+      {
+        id: 'dia5',
+        title: 'Dia 5: Bíceps e Tríceps',
+        sub: 'Braços Isolados - 6 Exercícios',
+        exercises: [
+          { name: 'Tríceps Corda', sets: 3, reps: '10 a 12' },
+          { name: 'Rosca Direta', sets: 3, reps: '10 a 12' },
+          { name: 'Tríceps Francês', sets: 3, reps: '10 a 12' },
+          { name: 'Rosca Martelo', sets: 3, reps: '10 a 12' },
+          { name: 'Tríceps Testa', sets: 3, reps: '10 a 12' },
+          { name: 'Rosca Scott', sets: 3, reps: '10 a 12' }
+        ]
+      }
+    ];
+
+    // Estado Global da Aplicação
+    let queue = [];
+    let completedSets = {}; // formato: { "exerciseName_setIndex": true }
+    let weights = {}; // formato: { "exerciseName": "25kg" }
+    let history = [];
+
+    // Temporizador
+    let timerInterval = null;
+    let timerSeconds = 0;
+    let timerRunning = false;
+
+    function initApp() {
+      loadState();
+      renderCurrentWorkout();
+      renderReorderModal();
+      lucide.createIcons();
+    }
+
+    function loadState() {
+      const savedQueue = localStorage.getItem('gym_queue');
+      if (savedQueue) {
+        queue = JSON.parse(savedQueue);
+      } else {
+        queue = [...DEFAULT_WORKOUTS];
+      }
+
+      const savedSets = localStorage.getItem('gym_completedSets');
+      if (savedSets) completedSets = JSON.parse(savedSets);
+
+      const savedWeights = localStorage.getItem('gym_weights');
+      if (savedWeights) weights = JSON.parse(savedWeights);
+
+      const savedHistory = localStorage.getItem('gym_history');
+      if (savedHistory) history = JSON.parse(savedHistory);
+    }
+
+    function saveState() {
+      localStorage.setItem('gym_queue', JSON.stringify(queue));
+      localStorage.setItem('gym_completedSets', JSON.stringify(completedSets));
+      localStorage.setItem('gym_weights', JSON.stringify(weights));
+      localStorage.setItem('gym_history', JSON.stringify(history));
+    }
+
+    function renderCurrentWorkout() {
+      if (queue.length === 0) return;
+      const current = queue[0];
+
+      document.getElementById('currentWorkoutTitle').innerText = current.title;
+      document.getElementById('currentWorkoutSub').innerText = current.sub;
+
+      const container = document.getElementById('exerciseList');
+      container.innerHTML = '';
+
+      let totalSetsCount = 0;
+      let completedSetsCount = 0;
+
+      current.exercises.forEach((ex, exIndex) => {
+        totalSetsCount += ex.sets;
+
+        const card = document.createElement('div');
+        card.className = 'bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-md hover:border-zinc-700 transition space-y-3';
+
+        // Cabeçalho do Exercício
+        const header = document.createElement('div');
+        header.className = 'flex justify-between items-center';
+        
+        const weightValue = weights[ex.name] || '';
+
+        header.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="w-6 h-6 rounded-lg bg-red-950/80 border border-red-800/60 text-red-400 font-bold text-xs flex items-center justify-center">
+              ${exIndex + 1}
+            </span>
+            <div>
+              <h4 class="font-bold text-white text-sm leading-tight">${ex.name}</h4>
+              <p class="text-[11px] text-zinc-400">${ex.sets} séries × ${ex.reps} reps</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-2.5 py-1">
+            <i data-lucide="scale" class="w-3.5 h-3.5 text-zinc-400"></i>
+            <input 
+              type="text" 
+              placeholder="Carga (kg)" 
+              value="${weightValue}" 
+              onchange="updateWeight('${ex.name}', this.value)"
+              class="w-16 bg-transparent text-xs text-white font-medium focus:outline-none text-right"
+            />
+          </div>
+        `;
+
+        // Botões das Séries
+        const setsContainer = document.createElement('div');
+        setsContainer.className = 'grid grid-cols-3 gap-2 pt-1';
+
+        for (let s = 1; s <= ex.sets; s++) {
+          const key = `${current.id}_${ex.name}_set_${s}`;
+          const isDone = !!completedSets[key];
+
+          if (isDone) completedSetsCount++;
+
+          const setBtn = document.createElement('button');
+          setBtn.onclick = () => toggleSet(key);
+          setBtn.className = isDone 
+            ? 'py-2 px-3 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-red-950/50'
+            : 'py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-zinc-300 hover:text-white text-xs font-semibold border border-zinc-700/50 transition flex items-center justify-center gap-1.5';
+
+          setBtn.innerHTML = isDone 
+            ? `<i data-lucide="check" class="w-3.5 h-3.5"></i> Série ${s}` 
+            : `<span class="w-2 h-2 rounded-full bg-zinc-600"></span> Série ${s}`;
+
+          setsContainer.appendChild(setBtn);
+        }
+
+        card.appendChild(header);
+        card.appendChild(setsContainer);
+        container.appendChild(card);
+      });
+
+      // Atualizar progresso
+      const percentage = totalSetsCount > 0 ? Math.round((completedSetsCount / totalSetsCount) * 100) : 0;
+      document.getElementById('progressBar').style.width = `${percentage}%`;
+      document.getElementById('progressText').innerText = `${percentage}% (${completedSetsCount}/${totalSetsCount})`;
+
+      lucide.createIcons();
+    }
+
+    function toggleSet(key) {
+      if (completedSets[key]) {
+        delete completedSets[key];
+      } else {
+        completedSets[key] = true;
+        // Iniciar timer automático de 60s ao marcar uma série
+        startTimer(60);
+      }
+      saveState();
+      renderCurrentWorkout();
+    }
+
+    function updateWeight(exerciseName, val) {
+      weights[exerciseName] = val;
+      saveState();
+    }
+
+    function resetCurrentSession() {
+      if (queue.length === 0) return;
+      const currentId = queue[0].id;
+
+      Object.keys(completedSets).forEach(key => {
+        if (key.startsWith(currentId)) {
+          delete completedSets[key];
+        }
+      });
+
+      saveState();
+      renderCurrentWorkout();
+    }
+
+    function finishWorkout() {
+      if (queue.length === 0) return;
+      const completedWorkout = queue[0];
+
+      // Gravar Histórico
+      const now = new Date();
+      const dateFormatted = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      
+      history.unshift({
+        title: completedWorkout.title,
+        date: dateFormatted,
+        timestamp: Date.now()
+      });
+
+      // Rotação da fila (o 1º vai para o final da fila)
+      const finished = queue.shift();
+      queue.push(finished);
+
+      // Limpar marcadores de séries da sessão concluída
+      Object.keys(completedSets).forEach(key => {
+        if (key.startsWith(finished.id)) {
+          delete completedSets[key];
+        }
+      });
+
+      saveState();
+      renderCurrentWorkout();
+      renderReorderModal();
+
+      // Feedback visual
+      alert(`Parabéns! Workout "${finished.title}" concluído!\nPróximo treino movido para o topo.`);
+    }
+
+    function renderReorderModal() {
+      const container = document.getElementById('reorderList');
+      container.innerHTML = '';
+
+      queue.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = index === 0 
+          ? 'bg-red-950/40 border border-red-800/60 p-3 rounded-xl flex justify-between items-center'
+          : 'bg-zinc-800/60 border border-zinc-700/50 p-3 rounded-xl flex justify-between items-center';
+
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-bold ${index === 0 ? 'text-red-400' : 'text-zinc-500'}">
+              ${index === 0 ? 'PRÓXIMO' : `#${index + 1}`}
+            </span>
+            <div>
+              <div class="text-xs font-bold text-white">${item.title}</div>
+              <div class="text-[10px] text-zinc-400">${item.exercises.length} exercícios</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1">
+            ${index !== 0 ? `
+              <button onclick="moveToTop(${index})" class="p-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs font-semibold text-white transition" title="Mover para topo">
+                Colocar Agora
+              </button>
+            ` : '<span class="text-[11px] font-bold text-red-400 px-2 py-0.5 bg-red-900/50 rounded-md">Ativo</span>'}
+          </div>
+        `;
+
+        container.appendChild(row);
+      });
+    }
+
+    function moveToTop(index) {
+      if (index <= 0 || index >= queue.length) return;
+      const selected = queue.splice(index, 1)[0];
+      queue.unshift(selected);
+      saveState();
+      renderCurrentWorkout();
+      renderReorderModal();
+    }
+
+    function resetQueueOrder() {
+      queue = [...DEFAULT_WORKOUTS];
+      saveState();
+      renderCurrentWorkout();
+      renderReorderModal();
+    }
+
+    function toggleReorderModal() {
+      const modal = document.getElementById('reorderModal');
+      modal.classList.toggle('hidden');
+      if (!modal.classList.contains('hidden')) {
+        renderReorderModal();
+      }
+    }
+
+    function toggleHistoryModal() {
+      const modal = document.getElementById('historyModal');
+      modal.classList.toggle('hidden');
+      if (!modal.classList.contains('hidden')) {
+        renderHistoryList();
+      }
+    }
+
+    function renderHistoryList() {
+      const container = document.getElementById('historyList');
+      container.innerHTML = '';
+
+      if (history.length === 0) {
+        container.innerHTML = '<p class="text-xs text-zinc-500 text-center py-6">Nenhum treino concluído ainda.</p>';
+        return;
+      }
+
+      history.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'bg-zinc-800/50 border border-zinc-700/50 p-3 rounded-xl flex justify-between items-center';
+        card.innerHTML = `
+          <div>
+            <div class="text-xs font-bold text-white">${item.title}</div>
+            <div class="text-[10px] text-zinc-400">${item.date}</div>
+          </div>
+          <span class="text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 p-1 rounded-lg">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+          </span>
+        `;
+        container.appendChild(card);
+      });
+
+      lucide.createIcons();
+    }
+
+    function clearHistory() {
+      if (confirm('Deseja realmente apagar todo o histórico de treinos?')) {
+        history = [];
+        saveState();
+        renderHistoryList();
+      }
+    }
+
+    function startTimer(seconds) {
+      clearInterval(timerInterval);
+      timerSeconds = seconds;
+      timerRunning = true;
+      updateTimerUI();
+
+      timerInterval = setInterval(() => {
+        if (timerSeconds > 0) {
+          timerSeconds--;
+          updateTimerUI();
+        } else {
+          clearInterval(timerInterval);
+          timerRunning = false;
+          updateTimerUI();
+          // Notificação auditiva simples usando Web Audio API
+          playBeep();
+        }
+      }, 1000);
+    }
+
+    function toggleTimer() {
+      if (timerRunning) {
+        clearInterval(timerInterval);
+        timerRunning = false;
+      } else {
+        if (timerSeconds > 0) {
+          startTimer(timerSeconds);
+        } else {
+          startTimer(60);
+        }
+      }
+      updateTimerUI();
+    }
+
+    function updateTimerUI() {
+      const mins = Math.floor(timerSeconds / 60);
+      const secs = timerSeconds % 60;
+      const display = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      
+      document.getElementById('timerDisplay').innerText = display;
+
+      const timerIconBg = document.getElementById('timerIconBg');
+      const toggleBtn = document.getElementById('timerToggleBtn');
+
+      if (timerRunning) {
+        timerIconBg.className = 'p-2.5 bg-red-600/20 text-red-500 rounded-xl animate-pulse';
+        toggleBtn.innerHTML = '<i data-lucide="pause" class="w-4 h-4"></i>';
+        toggleBtn.className = 'p-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg ml-1 transition';
+      } else {
+        timerIconBg.className = 'p-2.5 bg-zinc-800 text-zinc-400 rounded-xl';
+        toggleBtn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i>';
+        toggleBtn.className = 'p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg ml-1 transition';
+      }
+
+      lucide.createIcons();
+    }
+
+    function playBeep() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Nota Lá (A5)
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.5);
+      } catch (e) {
+        // Fallback em browsers restritivos
+      }
+    }
+
+    // Inicialização da Página
+    window.onload = function() {
+      initApp();
+    };
+  </script>
+</body>
+</html>

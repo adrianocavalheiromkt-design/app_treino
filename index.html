@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark">
 <head>
@@ -33,7 +34,6 @@
     }
   </script>
   <style>
-    /* Estilos personalizados para transição suave e scroll */
     body {
       background-color: #0F0F11;
       color: #F4F4F5;
@@ -58,10 +58,10 @@
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between font-sans selection:bg-red-500 selection:text-white">
+<body class="min-h-screen flex flex-col justify-between font-sans selection:bg-red-500 selection:text-white" onclick="enableAudioOnUserInteraction()">
 
   <!-- Top Navigation Header -->
-  <header class="sticky top-0 z-30 bg="#0F0F11"/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3">
+  <header class="sticky top-0 z-30 bg-[#0F0F11]/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3">
     <div class="max-w-xl mx-auto flex justify-between items-center">
       <div class="flex items-center gap-2">
         <div class="p-2 bg-red-600 rounded-xl text-white shadow-lg shadow-red-600/30">
@@ -118,6 +118,17 @@
       </div>
     </div>
 
+    <!-- Banner de Permissão de Som/Tela Acesa -->
+    <div id="audioNotice" class="bg-amber-950/30 border border-amber-800/40 rounded-xl p-2.5 flex items-center justify-between text-xs text-amber-200">
+      <div class="flex items-center gap-2">
+        <i data-lucide="volume-2" class="w-4 h-4 text-amber-400 flex-shrink-0"></i>
+        <span>Toque na tela para ativar o bipe e a tela acesa</span>
+      </div>
+      <button onclick="enableAudioExplicit()" class="px-2 py-1 bg-amber-600 hover:bg-amber-500 font-bold text-black rounded-lg text-[10px] transition">
+        Ativar
+      </button>
+    </div>
+
     <!-- Floating / Embedded Rest Timer Bar -->
     <div id="timerCard" class="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 shadow-lg flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -125,7 +136,12 @@
           <i data-lucide="timer" class="w-5 h-5"></i>
         </div>
         <div>
-          <div class="text-[11px] text-zinc-400 font-medium">Descanso de Série</div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-zinc-400 font-medium">Descanso de Série</span>
+            <span id="wakeLockStatus" class="hidden text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded font-semibold">
+              Tela Acesa
+            </span>
+          </div>
           <div id="timerDisplay" class="text-xl font-bold font-mono tracking-wider text-white">00:00</div>
         </div>
       </div>
@@ -223,7 +239,6 @@
   </div>
 
   <script>
-    // Configuração base dos treinos extraídos das imagens
     const DEFAULT_WORKOUTS = [
       {
         id: 'dia1',
@@ -292,20 +307,111 @@
 
     // Estado Global da Aplicação
     let queue = [];
-    let completedSets = {}; // formato: { "exerciseName_setIndex": true }
-    let weights = {}; // formato: { "exerciseName": "25kg" }
+    let completedSets = {};
+    let weights = {};
     let history = [];
 
-    // Temporizador
+    // Web Audio API Context
+    let audioCtx = null;
+    let audioEnabled = false;
+
+    // Wake Lock API
+    let wakeLock = null;
+
+    // Temporizador baseado em Timestamp (Date.now())
     let timerInterval = null;
-    let timerSeconds = 0;
+    let endTime = 0;
+    let timerDuration = 0;
     let timerRunning = false;
+
+    function enableAudioOnUserInteraction() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      audioEnabled = true;
+      const notice = document.getElementById('audioNotice');
+      if (notice) notice.classList.add('hidden');
+    }
+
+    function enableAudioExplicit() {
+      enableAudioOnUserInteraction();
+      playBeep(); // Teste sonoro imediato
+    }
+
+    // Gerenciador de Wake Lock (Mantém tela acesa)
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          document.getElementById('wakeLockStatus').classList.remove('hidden');
+          wakeLock.addEventListener('release', () => {
+            document.getElementById('wakeLockStatus').classList.add('hidden');
+          });
+        }
+      } catch (err) {
+        console.log('Wake Lock não ativado:', err);
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock !== null) {
+        wakeLock.release().then(() => {
+          wakeLock = null;
+          document.getElementById('wakeLockStatus').classList.add('hidden');
+        });
+      }
+    }
+
+    function playBeep() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      const now = audioCtx.currentTime;
+      
+      // Duplo Beep
+      [0, 0.25].forEach(offset => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, now + offset); // Nota Lá (A5)
+
+        gain.gain.setValueAtTime(0.3, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.18);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.2);
+      });
+
+      // Ativar Vibração se suportado no dispositivo
+      if ('vibrate' in navigator) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    }
 
     function initApp() {
       loadState();
       renderCurrentWorkout();
       renderReorderModal();
       lucide.createIcons();
+
+      // Recalcular tempo ao retornar para a aba/desbloquear tela
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && timerRunning) {
+          requestWakeLock();
+          updateTimerTick();
+        }
+      });
     }
 
     function loadState() {
@@ -421,7 +527,7 @@
         delete completedSets[key];
       } else {
         completedSets[key] = true;
-        // Iniciar timer automático de 60s ao marcar uma série
+        // Iniciar descanso automático de 60s
         startTimer(60);
       }
       saveState();
@@ -461,11 +567,11 @@
         timestamp: Date.now()
       });
 
-      // Rotação da fila (o 1º vai para o final da fila)
+      // Rotação da fila (1º vai para o final)
       const finished = queue.shift();
       queue.push(finished);
 
-      // Limpar marcadores de séries da sessão concluída
+      // Limpar marcadores de séries concluídas
       Object.keys(completedSets).forEach(key => {
         if (key.startsWith(finished.id)) {
           delete completedSets[key];
@@ -476,7 +582,6 @@
       renderCurrentWorkout();
       renderReorderModal();
 
-      // Feedback visual
       alert(`Parabéns! Workout "${finished.title}" concluído!\nPróximo treino movido para o topo.`);
     }
 
@@ -502,7 +607,7 @@
           </div>
           <div class="flex items-center gap-1">
             ${index !== 0 ? `
-              <button onclick="moveToTop(${index})" class="p-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs font-semibold text-white transition" title="Mover para topo">
+              <button onclick="moveToTop(${index})" class="p-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs font-semibold text-white transition">
                 Colocar Agora
               </button>
             ` : '<span class="text-[11px] font-bold text-red-400 px-2 py-0.5 bg-red-900/50 rounded-md">Ativo</span>'}
@@ -581,46 +686,56 @@
     }
 
     function startTimer(seconds) {
+      enableAudioOnUserInteraction();
       clearInterval(timerInterval);
-      timerSeconds = seconds;
+
+      timerDuration = seconds;
+      endTime = Date.now() + seconds * 1000;
       timerRunning = true;
-      updateTimerUI();
+
+      requestWakeLock();
+      updateTimerTick();
 
       timerInterval = setInterval(() => {
-        if (timerSeconds > 0) {
-          timerSeconds--;
-          updateTimerUI();
-        } else {
-          clearInterval(timerInterval);
-          timerRunning = false;
-          updateTimerUI();
-          // Notificação auditiva simples usando Web Audio API
-          playBeep();
-        }
-      }, 1000);
+        updateTimerTick();
+      }, 250);
+    }
+
+    function updateTimerTick() {
+      if (!timerRunning) return;
+
+      const remainingMs = endTime - Date.now();
+      const remainingSecs = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      const mins = Math.floor(remainingSecs / 60);
+      const secs = remainingSecs % 60;
+      const display = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+      document.getElementById('timerDisplay').innerText = display;
+
+      if (remainingSecs <= 0) {
+        clearInterval(timerInterval);
+        timerRunning = false;
+        playBeep();
+        releaseWakeLock();
+        updateTimerUI(0);
+      } else {
+        updateTimerUI(remainingSecs);
+      }
     }
 
     function toggleTimer() {
       if (timerRunning) {
         clearInterval(timerInterval);
         timerRunning = false;
+        releaseWakeLock();
+        updateTimerUI(0);
       } else {
-        if (timerSeconds > 0) {
-          startTimer(timerSeconds);
-        } else {
-          startTimer(60);
-        }
+        startTimer(60);
       }
-      updateTimerUI();
     }
 
-    function updateTimerUI() {
-      const mins = Math.floor(timerSeconds / 60);
-      const secs = timerSeconds % 60;
-      const display = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-      
-      document.getElementById('timerDisplay').innerText = display;
-
+    function updateTimerUI(remainingSecs) {
       const timerIconBg = document.getElementById('timerIconBg');
       const toggleBtn = document.getElementById('timerToggleBtn');
 
@@ -637,27 +752,7 @@
       lucide.createIcons();
     }
 
-    function playBeep() {
-      try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Nota Lá (A5)
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.5);
-      } catch (e) {
-        // Fallback em browsers restritivos
-      }
-    }
-
-    // Inicialização da Página
+    // Inicialização ao carregar a página
     window.onload = function() {
       initApp();
     };
